@@ -2,7 +2,7 @@ use bevy::{
     prelude::{App, Commands, Entity, Resource},
     DefaultPlugins,
 };
-use bevy_prototype_audio_graph::{Audio, AudioPlugin, SineWave};
+use bevy_prototype_audio_graph::{sine::SineWave, Audio, AudioPlugin};
 
 fn main() {
     App::new()
