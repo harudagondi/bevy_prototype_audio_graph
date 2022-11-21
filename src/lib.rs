@@ -2,7 +2,10 @@
 
 use bevy::{
     ecs::component::TableStorage,
-    prelude::{App, Commands, Component, CoreStage, Entity, NonSendMut, Plugin, Query, Without},
+    prelude::{
+        App, Commands, Component, CoreStage, Deref, DerefMut, Entity, NonSendMut, Plugin, Query,
+        Without,
+    },
 };
 use knyst::{
     audio_backend::{CpalBackend, CpalBackendOptions},
@@ -20,18 +23,18 @@ pub struct AudioPlugin;
 
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
-        app.init_non_send_resource::<AudioGraph>()
+        app.init_non_send_resource::<AudioOutput>()
             .add_system_to_stage(CoreStage::PostUpdate, play_audio::<SineWave>)
             .add_system_to_stage(CoreStage::PostUpdate, play_audio::<AudioSource>);
     }
 }
 
-pub struct AudioGraph {
+pub struct AudioOutput {
     pub(crate) graph: Graph,
     _backend: CpalBackend,
 }
 
-impl Default for AudioGraph {
+impl Default for AudioOutput {
     fn default() -> Self {
         let mut backend = CpalBackend::new(CpalBackendOptions::default())
             .unwrap_or_else(|err| panic!("Cannot initialize cpal backend. Error: {err}"));
@@ -62,7 +65,7 @@ impl Default for AudioGraph {
     }
 }
 
-impl AudioGraph {
+impl AudioOutput {
     fn play_stream(&mut self, stream: impl Gen + Send + 'static) -> NodeAddress {
         let node_address = self.graph.push_gen(stream);
         self.graph
@@ -91,27 +94,30 @@ impl<T: Streamable> Audio<T> {
 #[derive(Component)]
 pub struct AudioId(pub NodeAddress);
 
-// #[derive(Deref, DerefMut)]
-// pub struct AudioControl<T: Streamable>(Handle<T::Stream>);
+#[derive(Deref, DerefMut)]
+pub struct AudioControl<T: Streamable>(T::Control);
 
-// impl<T: Streamable> Component for AudioControl<T> {
-//     type Storage = TableStorage;
-// }
+impl<T: Streamable> Component for AudioControl<T> {
+    type Storage = TableStorage;
+}
 
 pub trait Streamable: Send + Sync + 'static {
     type Stream: Gen + Send;
+    type Control: Send + Sync;
 
-    fn to_stream(&self) -> Self::Stream;
+    fn to_stream(&self) -> (Self::Stream, Self::Control);
 }
 
 fn play_audio<T: Streamable>(
     mut commands: Commands,
     audio_query: Query<(Entity, &Audio<T>), Without<AudioId>>,
-    mut audio_graph: NonSendMut<AudioGraph>,
+    mut audio_graph: NonSendMut<AudioOutput>,
 ) {
     for (entity, audio) in audio_query.iter() {
-        let stream = audio.stream.to_stream();
+        let (stream, control) = audio.stream.to_stream();
         let node_address = audio_graph.play_stream(stream);
-        commands.entity(entity).insert(AudioId(node_address));
+        commands
+            .entity(entity)
+            .insert((AudioId(node_address), AudioControl::<T>(control)));
     }
 }

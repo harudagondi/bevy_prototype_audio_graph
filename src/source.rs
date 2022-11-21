@@ -47,13 +47,19 @@ impl Gen for AudioSourceStream {
     }
 }
 
+pub struct AudioSourceControl;
+
 impl Streamable for AudioSource {
     type Stream = AudioSourceStream;
+    type Control = AudioSourceControl;
 
-    fn to_stream(&self) -> Self::Stream {
-        AudioSourceStream {
-            frames: self.frames.clone(),
-            cursor: 0,
-        }
+    fn to_stream(&self) -> (Self::Stream, Self::Control) {
+        (
+            AudioSourceStream {
+                frames: self.frames.clone(),
+                cursor: 0,
+            },
+            AudioSourceControl,
+        )
     }
 }
